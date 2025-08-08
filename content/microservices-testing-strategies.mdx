@@ -1,0 +1,600 @@
+---
+title: "Frontend Testing Strategies for React Applications"
+publishedAt: "2024-12-15"
+summary: "A comprehensive guide to testing React applications including unit tests, integration tests, and component testing with React Testing Library"
+tags: ["React", "Testing", "Jest", "React Testing Library", "Frontend", "Quality Assurance"]
+---
+
+# Frontend Testing Strategies for React Applications
+
+In today's frontend development landscape, comprehensive testing is essential for delivering reliable, maintainable React applications. This guide explores how to implement effective testing strategies for React applications, with real-world examples from high-traffic user-facing platforms.
+
+![Frontend Testing](/web-developement.jpeg)
+
+## The Testing Landscape for React Applications
+
+Modern React applications require testing strategies that cover:
+- Component behavior and user interactions
+- State management and data flow
+- Real-time integrations and API calls
+- Performance and accessibility
+- Cross-browser compatibility
+
+## Core Testing Technologies
+
+### Jest and React Testing Library
+
+Jest provides the testing framework while React Testing Library focuses on user-centric testing:
+
+```typescript
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { BettingSlip } from '../components/BettingSlip';
+
+describe('BettingSlip Component', () => {
+  const mockSelections = [
+    {
+      id: '1',
+      event: 'Manchester United vs Liverpool',
+      odds: 2.5,
+      stake: 10.00
+    },
+    {
+      id: '2', 
+      event: 'Arsenal vs Chelsea',
+      odds: 3.2,
+      stake: 15.00
+    }
+  ];
+
+  it('renders betting selections correctly', () => {
+    render(
+      <BettingSlip 
+        selections={mockSelections}
+        totalStake={25.00}
+        potentialWinnings={75.00}
+      />
+    );
+
+    expect(screen.getByText('Your Betting Slip')).toBeInTheDocument();
+    expect(screen.getByText('Manchester United vs Liverpool')).toBeInTheDocument();
+    expect(screen.getByText('Arsenal vs Chelsea')).toBeInTheDocument();
+    expect(screen.getByText('Total Stake: £25.00')).toBeInTheDocument();
+    expect(screen.getByText('Potential Winnings: £75.00')).toBeInTheDocument();
+  });
+
+  it('allows user to remove selections', async () => {
+    const user = userEvent.setup();
+    const mockOnRemove = jest.fn();
+
+    render(
+      <BettingSlip 
+        selections={mockSelections}
+        totalStake={25.00}
+        potentialWinnings={75.00}
+        onRemoveSelection={mockOnRemove}
+      />
+    );
+
+    const removeButtons = screen.getAllByRole('button', { name: /remove/i });
+    await user.click(removeButtons[0]);
+
+    expect(mockOnRemove).toHaveBeenCalledWith('1');
+  });
+});
+```
+
+### Testing Custom Hooks
+
+Test custom hooks using React Testing Library's renderHook:
+
+```typescript
+import { renderHook, act } from '@testing-library/react';
+import { useWebSocket } from '../hooks/useWebSocket';
+
+describe('useWebSocket Hook', () => {
+  let mockWebSocket: any;
+  
+  beforeEach(() => {
+    mockWebSocket = {
+      onopen: jest.fn(),
+      onmessage: jest.fn(),
+      onclose: jest.fn(),
+      close: jest.fn()
+    };
+    
+    global.WebSocket = jest.fn(() => mockWebSocket);
+  });
+
+  it('connects to WebSocket on mount', () => {
+    renderHook(() => useWebSocket('ws://localhost:8080/odds'));
+    
+    expect(global.WebSocket).toHaveBeenCalledWith('ws://localhost:8080/odds');
+  });
+
+  it('updates data when message received', () => {
+    const { result } = renderHook(() => useWebSocket('ws://localhost:8080/odds'));
+    
+    const mockData = { eventId: '123', odds: 2.5 };
+    const mockEvent = { data: JSON.stringify(mockData) };
+    
+    act(() => {
+      mockWebSocket.onmessage(mockEvent);
+    });
+    
+    expect(result.current.data).toEqual(mockData);
+  });
+
+  it('handles connection state changes', () => {
+    const { result } = renderHook(() => useWebSocket('ws://localhost:8080/odds'));
+    
+    expect(result.current.isConnected).toBe(false);
+    
+    act(() => {
+      mockWebSocket.onopen();
+    });
+    
+    expect(result.current.isConnected).toBe(true);
+  });
+});
+```
+
+## Component Testing Strategies
+
+### Testing User Interactions
+
+Focus on testing user behavior rather than implementation details:
+
+```typescript
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { OddsDisplay } from '../components/OddsDisplay';
+
+describe('OddsDisplay Component', () => {
+  const mockOdds = {
+    eventId: '123',
+    homeOdds: 2.5,
+    awayOdds: 3.2,
+    drawOdds: 2.8,
+    lastUpdated: new Date()
+  };
+
+  it('allows user to place bets', async () => {
+    const user = userEvent.setup();
+    const mockOnBet = jest.fn();
+
+    render(
+      <OddsDisplay 
+        odds={mockOdds}
+        onPlaceBet={mockOnBet}
+      />
+    );
+
+    const homeBetButton = screen.getByRole('button', { name: /bet on home/i });
+    await user.click(homeBetButton);
+
+    expect(mockOnBet).toHaveBeenCalledWith({
+      eventId: '123',
+      selection: 'home',
+      odds: 2.5
+    });
+  });
+
+  it('shows loading state while fetching odds', () => {
+    render(<OddsDisplay isLoading={true} />);
+    
+    expect(screen.getByText('Loading odds...')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+  });
+
+  it('displays error state when odds fetch fails', () => {
+    render(
+      <OddsDisplay 
+        error="Failed to load odds"
+        onRetry={jest.fn()}
+      />
+    );
+    
+    expect(screen.getByText('Failed to load odds')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+  });
+});
+```
+
+### Testing Form Components
+
+Test form validation and submission:
+
+```typescript
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { BettingForm } from '../components/BettingForm';
+
+describe('BettingForm Component', () => {
+  it('validates stake amount', async () => {
+    const user = userEvent.setup();
+    const mockOnSubmit = jest.fn();
+
+    render(<BettingForm onSubmit={mockOnSubmit} />);
+
+    const stakeInput = screen.getByLabelText(/stake amount/i);
+    const submitButton = screen.getByRole('button', { name: /place bet/i });
+
+    // Test minimum stake validation
+    await user.type(stakeInput, '0.50');
+    await user.click(submitButton);
+
+    expect(screen.getByText('Minimum stake is £1.00')).toBeInTheDocument();
+    expect(mockOnSubmit).not.toHaveBeenCalled();
+
+    // Test valid stake
+    await user.clear(stakeInput);
+    await user.type(stakeInput, '10.00');
+    await user.click(submitButton);
+
+    expect(screen.queryByText('Minimum stake is £1.00')).not.toBeInTheDocument();
+    expect(mockOnSubmit).toHaveBeenCalledWith({
+      stake: 10.00,
+      selections: []
+    });
+  });
+
+  it('prevents submission without selections', async () => {
+    const user = userEvent.setup();
+    const mockOnSubmit = jest.fn();
+
+    render(<BettingForm onSubmit={mockOnSubmit} />);
+
+    const stakeInput = screen.getByLabelText(/stake amount/i);
+    const submitButton = screen.getByRole('button', { name: /place bet/i });
+
+    await user.type(stakeInput, '10.00');
+    await user.click(submitButton);
+
+    expect(screen.getByText('Please select at least one bet')).toBeInTheDocument();
+    expect(mockOnSubmit).not.toHaveBeenCalled();
+  });
+});
+```
+
+## Integration Testing
+
+### Testing API Integrations
+
+Test components that interact with APIs:
+
+```typescript
+import React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { rest } from 'msw';
+import { setupServer } from 'msw/node';
+import { LiveScores } from '../components/LiveScores';
+
+const server = setupServer(
+  rest.get('/api/scores', (req, res, ctx) => {
+    return res(
+      ctx.json([
+        {
+          id: '1',
+          homeTeam: 'Manchester United',
+          awayTeam: 'Liverpool',
+          homeScore: 2,
+          awayScore: 1,
+          status: 'live'
+        }
+      ])
+    );
+  })
+);
+
+beforeAll(() => server.listen());
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+
+describe('LiveScores Component', () => {
+  it('fetches and displays live scores', async () => {
+    render(<LiveScores />);
+
+    expect(screen.getByText('Loading scores...')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText('Manchester United')).toBeInTheDocument();
+      expect(screen.getByText('Liverpool')).toBeInTheDocument();
+      expect(screen.getByText('2 - 1')).toBeInTheDocument();
+    });
+  });
+
+  it('handles API errors gracefully', async () => {
+    server.use(
+      rest.get('/api/scores', (req, res, ctx) => {
+        return res(ctx.status(500));
+      })
+    );
+
+    render(<LiveScores />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load scores')).toBeInTheDocument();
+    });
+  });
+});
+```
+
+### Testing Real-time Features
+
+Test WebSocket and real-time functionality:
+
+```typescript
+import React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { RealTimeOdds } from '../components/RealTimeOdds';
+
+// Mock WebSocket
+const mockWebSocket = {
+  onopen: jest.fn(),
+  onmessage: jest.fn(),
+  onclose: jest.fn(),
+  close: jest.fn()
+};
+
+global.WebSocket = jest.fn(() => mockWebSocket);
+
+describe('RealTimeOdds Component', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('connects to WebSocket and displays real-time odds', async () => {
+    render(<RealTimeOdds eventId="123" />);
+
+    // Simulate WebSocket connection
+    mockWebSocket.onopen();
+
+    // Simulate odds update
+    const mockOddsData = {
+      eventId: '123',
+      homeOdds: 2.5,
+      awayOdds: 3.2,
+      drawOdds: 2.8
+    };
+
+    mockWebSocket.onmessage({
+      data: JSON.stringify(mockOddsData)
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('2.50')).toBeInTheDocument();
+      expect(screen.getByText('3.20')).toBeInTheDocument();
+      expect(screen.getByText('2.80')).toBeInTheDocument();
+    });
+  });
+
+  it('shows connection status', () => {
+    render(<RealTimeOdds eventId="123" />);
+
+    expect(screen.getByText('Connecting...')).toBeInTheDocument();
+
+    mockWebSocket.onopen();
+
+    expect(screen.getByText('Connected')).toBeInTheDocument();
+  });
+});
+```
+
+## Performance Testing
+
+### Testing Component Performance
+
+Test for performance regressions:
+
+```typescript
+import React from 'react';
+import { render } from '@testing-library/react';
+import { renderHook } from '@testing-library/react-hooks';
+import { useMemo } from 'react';
+import { BettingSlip } from '../components/BettingSlip';
+
+describe('Performance Tests', () => {
+  it('memoizes expensive calculations', () => {
+    const mockSelections = Array.from({ length: 1000 }, (_, i) => ({
+      id: i.toString(),
+      event: `Event ${i}`,
+      odds: 2.5,
+      stake: 10.00
+    }));
+
+    const { result } = renderHook(() => {
+      return useMemo(() => {
+        return mockSelections.reduce((total, selection) => {
+          return total + (selection.odds * selection.stake);
+        }, 0);
+      }, [mockSelections]);
+    });
+
+    expect(result.current).toBe(25000); // 1000 * 2.5 * 10
+  });
+
+  it('renders large lists efficiently', () => {
+    const largeSelections = Array.from({ length: 100 }, (_, i) => ({
+      id: i.toString(),
+      event: `Event ${i}`,
+      odds: 2.5,
+      stake: 10.00
+    }));
+
+    const startTime = performance.now();
+    
+    render(
+      <BettingSlip 
+        selections={largeSelections}
+        totalStake={1000.00}
+        potentialWinnings={2500.00}
+      />
+    );
+    
+    const endTime = performance.now();
+    const renderTime = endTime - startTime;
+
+    // Should render in under 100ms
+    expect(renderTime).toBeLessThan(100);
+  });
+});
+```
+
+## Accessibility Testing
+
+### Testing Accessibility Features
+
+Ensure components meet accessibility standards:
+
+```typescript
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import { axe, toHaveNoViolations } from 'jest-axe';
+import { BettingSlip } from '../components/BettingSlip';
+
+expect.extend(toHaveNoViolations);
+
+describe('Accessibility Tests', () => {
+  it('meets WCAG 2.1 AA standards', async () => {
+    const { container } = render(
+      <BettingSlip 
+        selections={[]}
+        totalStake={0}
+        potentialWinnings={0}
+      />
+    );
+
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('has proper ARIA labels', () => {
+    render(
+      <BettingSlip 
+        selections={[]}
+        totalStake={0}
+        potentialWinnings={0}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /place bet/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/stake amount/i)).toBeInTheDocument();
+  });
+
+  it('supports keyboard navigation', () => {
+    render(
+      <BettingSlip 
+        selections={[]}
+        totalStake={0}
+        potentialWinnings={0}
+      />
+    );
+
+    const buttons = screen.getAllByRole('button');
+    
+    buttons.forEach(button => {
+      expect(button).toHaveAttribute('tabindex');
+    });
+  });
+});
+```
+
+## Test Configuration
+
+### Jest Configuration
+
+Configure Jest for React testing:
+
+```javascript
+// jest.config.js
+module.exports = {
+  testEnvironment: 'jsdom',
+  setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
+  moduleNameMapping: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '\\.(css|less|scss|sass)$': 'identity-obj-proxy'
+  },
+  collectCoverageFrom: [
+    'src/**/*.{js,jsx,ts,tsx}',
+    '!src/**/*.d.ts',
+    '!src/index.tsx',
+    '!src/serviceWorker.ts'
+  ],
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
+    }
+  }
+};
+```
+
+### Setup Tests
+
+Configure test utilities:
+
+```typescript
+// src/setupTests.ts
+import '@testing-library/jest-dom';
+import 'jest-axe/extend-expect';
+
+// Mock IntersectionObserver
+global.IntersectionObserver = class IntersectionObserver {
+  constructor() {}
+  observe() { return null; }
+  unobserve() { return null; }
+  disconnect() { return null; }
+};
+
+// Mock ResizeObserver
+global.ResizeObserver = class ResizeObserver {
+  constructor() {}
+  observe() { return null; }
+  unobserve() { return null; }
+  disconnect() { return null; }
+};
+
+// Mock matchMedia
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: jest.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
+  })),
+});
+```
+
+## Best Practices
+
+1. **Test User Behavior**: Focus on what users do, not implementation details
+2. **Use Semantic Queries**: Prefer `getByRole` over `getByTestId`
+3. **Test Accessibility**: Ensure components meet WCAG standards
+4. **Mock External Dependencies**: Use MSW for API mocking
+5. **Test Error States**: Cover error scenarios and edge cases
+6. **Performance Testing**: Monitor for performance regressions
+7. **Continuous Integration**: Run tests on every commit
+
+## Conclusion
+
+Comprehensive testing is essential for delivering reliable React applications. By implementing these strategies, you can ensure your user-facing experiences are robust, accessible, and performant.
+
+Key takeaways:
+- Focus on user behavior in tests
+- Test real-time features thoroughly
+- Ensure accessibility compliance
+- Monitor performance continuously
+- Automate testing in CI/CD
+
+The future of frontend testing lies in creating comprehensive test suites that ensure user experiences are reliable and engaging.
