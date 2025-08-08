@@ -76,7 +76,7 @@ export const DATA = {
       },
       downloadCV: {
         name: "Download CV",
-    url: "https://drive.google.com/file/d/1U6hxDNF1U_Iq40Vo8k-2kKEPlmSI-rJM/view?usp=sharing",
+  url: "https://drive.google.com/file/d/12L6K8OXDluYshJSjaEptJK0gLfRPZkvZ/view?usp=sharing",
         icon: Icons.files,
         navbar: false,
       },
